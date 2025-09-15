@@ -5,7 +5,7 @@ from .models import LEDContent, ContentSession, SessionText, SessionLine
 
 class SessionLineInline(nested_admin.NestedTabularInline):
     model = SessionLine
-    extra = 2
+    extra = 0
     max_num = 13
     fields = ['start_index', 'color']
 
@@ -14,7 +14,8 @@ class SessionTextInline(nested_admin.NestedStackedInline):
     model = SessionText
     fields = ['start_index', 'content', 'color']
     max_num = 1
-    min_num = 1
+    min_num = 0
+    extra = 0
 
 
 class ContentSessionInline(nested_admin.NestedStackedInline):

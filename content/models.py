@@ -12,10 +12,16 @@ class LEDContent(models.Model):
     end_timestamp = models.DateTimeField(null=True, blank=True)
     checksum = models.CharField(max_length=64, blank=True)
     is_active = models.BooleanField(default=True)
-    
+
     class Meta:
         ordering = ['-created_at']
-    
+
+    def save(self, *args, **kwargs):
+        if self.is_active:
+            # Deactivate all other LEDContent instances
+            LEDContent.objects.filter(is_active=True).exclude(pk=self.pk).update(is_active=False)
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return self.title
 
