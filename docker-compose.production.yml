@@ -17,3 +17,4 @@ services:
              uv run python manage.py collectstatic --noinput &&
              uv run python manage.py runserver 0.0.0.0:8000"
     restart: unless-stopped
+    user: "1000:1000"
