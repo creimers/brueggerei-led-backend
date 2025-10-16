@@ -8,10 +8,11 @@ class LEDContent(models.Model):
     title = models.CharField(max_length=200)
     created_at = models.DateTimeField(auto_now_add=True)
     created_by = models.ForeignKey(User, on_delete=models.CASCADE)
-    start_timestamp = models.DateTimeField(null=True, blank=True)
-    end_timestamp = models.DateTimeField(null=True, blank=True)
+    start_time = models.TimeField(null=True, blank=True, verbose_name="Frame1", help_text="Daily start time (hh:mm)")
+    end_time = models.TimeField(null=True, blank=True, verbose_name="Frame0", help_text="Daily end time (hh:mm)")
     checksum = models.CharField(max_length=64, blank=True)
     is_active = models.BooleanField(default=True)
+    is_test = models.BooleanField(default=False, help_text="Mark as test content")
 
     class Meta:
         ordering = ['-created_at']
@@ -20,6 +21,9 @@ class LEDContent(models.Model):
         if self.is_active:
             # Deactivate all other LEDContent instances
             LEDContent.objects.filter(is_active=True).exclude(pk=self.pk).update(is_active=False)
+        if self.is_test:
+            # Unmark all other LEDContent instances as test
+            LEDContent.objects.filter(is_test=True).exclude(pk=self.pk).update(is_test=False)
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -31,7 +35,11 @@ class ContentSession(models.Model):
     session_order = models.PositiveIntegerField()
     delay = models.PositiveIntegerField(default=100)  # Animation delay in milliseconds
     created_at = models.DateTimeField(auto_now_add=True)
-    
+    start_date = models.DateField(blank=True, null=True, help_text="Optional: Start date (YYYY-MM-DD)")
+    start_time = models.TimeField(blank=True, null=True, help_text="Optional: Start time (hh:mm)")
+    end_date = models.DateField(blank=True, null=True, help_text="Optional: End date (YYYY-MM-DD)")
+    end_time = models.TimeField(blank=True, null=True, help_text="Optional: End time (hh:mm)")
+
     class Meta:
         ordering = ['session_order']
         unique_together = ['led_content', 'session_order']

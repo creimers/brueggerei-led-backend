@@ -21,17 +21,17 @@ class SessionTextInline(nested_admin.NestedStackedInline):
 class ContentSessionInline(nested_admin.NestedStackedInline):
     model = ContentSession
     extra = 1
-    fields = ['session_order', 'delay']
+    fields = ['session_order', 'start_date', 'start_time', 'end_date', 'end_time', 'delay']
     inlines = [SessionTextInline, SessionLineInline]
 
 
 @admin.register(LEDContent)
 class LEDContentAdmin(nested_admin.NestedModelAdmin):
-    list_display = ['title', 'created_by', 'created_at', 'is_active']
-    list_filter = ['is_active', 'created_at', 'created_by']
+    list_display = ['title', 'created_by', 'created_at', 'is_active', 'is_test']
+    list_filter = ['is_active', 'is_test', 'created_at', 'created_by']
     search_fields = ['title']
     readonly_fields = ['created_at', 'checksum']
-    fields = ['title', 'start_timestamp', 'end_timestamp', 'is_active']
+    fields = ['title', 'start_time', 'end_time', 'is_active', 'is_test']
     inlines = [ContentSessionInline]
 
     def save_model(self, request, obj, form, change):
