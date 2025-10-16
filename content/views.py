@@ -32,11 +32,11 @@ class LEDContentDefView(generics.GenericAPIView):
     def get(self, request, *args, **kwargs):
         instance = self.get_object()
         if instance is None:
-            return HttpResponse('', content_type='text/plain')
-        
+            return HttpResponse('', content_type='text/plain; charset=utf-8')
+
         def_content = self.generate_def_format(instance)
-        
-        return HttpResponse(def_content, content_type='text/plain')
+
+        return HttpResponse(def_content, content_type='text/plain; charset=utf-8')
     
     def generate_def_format(self, led_content):
         """Generate the .def format text from LEDContent instance"""
