@@ -51,6 +51,7 @@ class LEDContentDefView(generics.GenericAPIView):
             lines.append(f'Frame0={led_content.end_time.strftime("%H:%M")}')
 
         sessions = led_content.sessions.all().order_by('session_order')
+        last_text = None  # Track last text for repetition logic
 
         for i, session in enumerate(sessions):
             # Add Start= line if date or time is specified
@@ -71,19 +72,39 @@ class LEDContentDefView(generics.GenericAPIView):
             if end_parts:
                 lines.append(f'End={" ".join(end_parts)}')
 
-            # Add lines for this session
+            # Check if session has text or animation
+            has_text = hasattr(session, 'text') and session.text
+            has_animation = hasattr(session, 'animation') and session.animation
+
+            # Add lines for this session (before text)
             for line in session.lines.all().order_by('start_index'):
                 r, g, b = line.color_rgb
                 lines.append(f'Line={line.start_index},{r},{g},{b}')
 
             # Add text configuration
-            if hasattr(session, 'text') and session.text:
+            if has_text:
                 text = session.text
                 lines.append(f'Text={text.start_index},{text.content}')
-
                 # Add color configuration
                 r, g, b = text.color_rgb
                 lines.append(f'Color={r},{g},{b}')
+                last_text = text  # Remember this text
+            elif has_animation and last_text is None:
+                # First animation without preceding text - add empty text
+                lines.append('Text=')
+            # If has_animation and last_text exists, previous text is repeated (no Text= line)
+
+            # Add animation configuration (after text)
+            if has_animation:
+                anim = session.animation
+                image_list = anim.get_image_list()
+                # Format: Animation=l,t,n,<Bildname1>,<Bildname2>,...
+                animation_parts = [
+                    str(anim.loop_count),
+                    str(anim.time_between_images),
+                    str(len(image_list))
+                ] + image_list
+                lines.append(f'Animation={",".join(animation_parts)}')
 
             # Add delay
             lines.append(f'Delay={session.delay}')

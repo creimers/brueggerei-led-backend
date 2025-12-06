@@ -1,6 +1,59 @@
 import nested_admin
 from django.contrib import admin
-from .models import LEDContent, ContentSession, SessionText, SessionLine
+from django import forms
+from .models import LEDContent, ContentSession, SessionText, SessionLine, Image, SessionAnimation
+
+
+@admin.register(Image)
+class ImageAdmin(admin.ModelAdmin):
+    list_display = ['name', 'description', 'created_at']
+    search_fields = ['name', 'description']
+    ordering = ['name']
+    fields = ['name', 'description']
+
+
+class SessionAnimationForm(forms.ModelForm):
+    """Custom form for SessionAnimation with image selection"""
+
+    # Create a custom field for selecting images
+    selected_images = forms.MultipleChoiceField(
+        required=False,
+        widget=forms.CheckboxSelectMultiple,
+        help_text="Select images to include in animation"
+    )
+
+    class Meta:
+        model = SessionAnimation
+        fields = ['loop_count', 'time_between_images', 'selected_images', 'image_names']
+        widgets = {
+            'image_names': forms.TextInput(attrs={'size': 60})
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Populate choices from Image table
+        self.fields['selected_images'].choices = [
+            (img.name, f"{img.name}" + (f" - {img.description}" if img.description else ""))
+            for img in Image.objects.all()
+        ]
+
+        # Pre-populate selected_images if editing existing animation
+        if self.instance and self.instance.pk and self.instance.image_names:
+            self.fields['selected_images'].initial = self.instance.get_image_list()
+
+        # Make image_names readonly (will be auto-populated from checkboxes)
+        # self.fields['image_names'].widget.attrs['readonly'] = True
+        self.fields['image_names'].help_text = 'Auto-generated from selected images. You can also manually edit the order here.'
+
+    def clean(self):
+        cleaned_data = super().clean()
+        selected_images = cleaned_data.get('selected_images', [])
+
+        # Convert selected images to comma-separated string
+        if selected_images:
+            cleaned_data['image_names'] = ','.join(selected_images)
+
+        return cleaned_data
 
 
 class SessionLineInline(nested_admin.NestedTabularInline):
@@ -18,11 +71,20 @@ class SessionTextInline(nested_admin.NestedStackedInline):
     extra = 0
 
 
+class SessionAnimationInline(nested_admin.NestedStackedInline):
+    model = SessionAnimation
+    form = SessionAnimationForm
+    fields = ['loop_count', 'time_between_images', 'selected_images', 'image_names']
+    max_num = 1
+    min_num = 0
+    extra = 0
+
+
 class ContentSessionInline(nested_admin.NestedStackedInline):
     model = ContentSession
     extra = 1
     fields = ['session_order', 'start_date', 'start_time', 'end_date', 'end_time', 'delay']
-    inlines = [SessionTextInline, SessionLineInline]
+    inlines = [SessionTextInline, SessionAnimationInline, SessionLineInline]
 
 
 @admin.register(LEDContent)
