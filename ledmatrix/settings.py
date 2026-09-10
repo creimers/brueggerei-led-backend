@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+import os
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -19,21 +20,52 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-34^232^wd8%xkdj69=p2v*eq6)blsq@6zc9t=q#n9=#c75-lmp"
+# Production is configured through the environment (see .env.example and
+# production.yml): DJANGO_DEBUG=false switches on the production settings
+# below, which then require DJANGO_SECRET_KEY and DJANGO_ALLOWED_HOSTS.
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv("DJANGO_DEBUG", "true").strip().lower() in ("1", "true", "yes")
 
-ALLOWED_HOSTS = [
-    "genossenschaftsmatrix.superservice-international.com",
-    "localhost",
-    "127.0.0.1",
-]
+if DEBUG:
+    # SECURITY WARNING: development only; production refuses to start
+    # without DJANGO_SECRET_KEY.
+    SECRET_KEY = os.getenv(
+        "DJANGO_SECRET_KEY",
+        "django-insecure-34^232^wd8%xkdj69=p2v*eq6)blsq@6zc9t=q#n9=#c75-lmp",
+    )
+    ALLOWED_HOSTS = [
+        host.strip()
+        for host in os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+        if host.strip()
+    ]
+else:
+    # Both values are required; there is no fallback to anything in source.
+    SECRET_KEY = os.environ["DJANGO_SECRET_KEY"]
 
-CSRF_TRUSTED_ORIGINS = [
-    "https://genossenschaftsmatrix.superservice-international.com",
-]
+    # Comma-separated, e.g. "genossenschaftsmatrix.superservice-international.com".
+    ALLOWED_HOSTS = [
+        host.strip()
+        for host in os.environ["DJANGO_ALLOWED_HOSTS"].split(",")
+        if host.strip()
+    ]
+
+    # TLS is terminated by the reverse proxy (Traefik), which forwards the
+    # original scheme in X-Forwarded-Proto. Without that header every
+    # request looks like plain HTTP to Django and SECURE_SSL_REDIRECT would
+    # loop.
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SECURE_SSL_REDIRECT = True
+    # The container healthcheck (production.yml) talks plain HTTP to gunicorn.
+    SECURE_REDIRECT_EXEMPT = [r"^-/health/$"]
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = 60 * 60 * 24 * 365
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+
+# Needed for POST requests to the admin behind the reverse proxy; the
+# scheme is mandatory since Django 4.0.
+CSRF_TRUSTED_ORIGINS = [f"https://{host}" for host in ALLOWED_HOSTS]
 
 # Application definition
 
@@ -82,10 +114,12 @@ WSGI_APPLICATION = "ledmatrix.wsgi.application"
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
+# SQLite. In production the file lives in the bind-mounted ./data directory
+# (production.yml sets DATABASE_PATH) so it survives container recreation.
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+        "NAME": Path(os.getenv("DATABASE_PATH", BASE_DIR / "db.sqlite3")),
     }
 }
 
@@ -124,8 +158,11 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = "static/"
-STATIC_ROOT = BASE_DIR / "static"
+STATIC_URL = "/static/"
+# collectstatic target. In production a bind mount served by the nginx
+# sidecar (production.yml); development serves the app static files via
+# runserver and never runs collectstatic.
+STATIC_ROOT = BASE_DIR / "staticfiles"
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

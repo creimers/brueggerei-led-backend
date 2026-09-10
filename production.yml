@@ -1,0 +1,76 @@
+# Production stack on the VM, behind the shared Traefik (external `web`
+# network, `letsencrypt` resolver, `websecure` entrypoint) and deployed with
+# `docker rollout` (make rollout). See README.md, "Production".
+#
+# The hostname comes from .env: SITE_HOST (default
+# genossenschaftsmatrix.superservice-international.com). Set it to a
+# temporary hostname to try the stack before the DNS switchover.
+# DJANGO_ALLOWED_HOSTS must include SITE_HOST.
+name: genossenschaftsmatrix
+
+networks:
+  web:
+    external: true
+
+services:
+  django:
+    build:
+      context: .
+    command: /app/start.sh
+    env_file: .env
+    environment:
+      DJANGO_DEBUG: "false"
+      DATABASE_PATH: /app/data/db.sqlite3
+    volumes:
+      # SQLite database; lives on the VM, not in the image.
+      - ./data:/app/data
+      # collectstatic output, served by the nginx sidecar.
+      - ./staticfiles:/app/staticfiles
+    networks:
+      - web
+    # unless-stopped (not always): brings the stack back after a VM reboot,
+    # but does not fight `docker rollout`, which stops the old container
+    # explicitly once the new one is healthy.
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      # gzip
+      - "traefik.http.middlewares.genossenschaftsmatrix-compress.compress=true"
+      # the site: /admin and the /api endpoints for the LED hardware
+      - "traefik.http.routers.genossenschaftsmatrix-web.rule=Host(`${SITE_HOST:-genossenschaftsmatrix.superservice-international.com}`)"
+      - "traefik.http.routers.genossenschaftsmatrix-web.entrypoints=websecure"
+      - "traefik.http.routers.genossenschaftsmatrix-web.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.genossenschaftsmatrix-web.middlewares=genossenschaftsmatrix-compress"
+      - "traefik.http.services.genossenschaftsmatrix-web.loadbalancer.server.port=8000"
+      # docker rollout: fail the healthcheck first, then give Traefik time
+      # to stop routing to this container before it is removed.
+      - "docker-rollout.pre-stop-hook=touch /tmp/drain && sleep 10"
+    healthcheck:
+      # /-/health/ is exempt from the HTTPS redirect; the Host header must
+      # be one of DJANGO_ALLOWED_HOSTS (the first one is used).
+      test: >
+        sh -c 'test ! -f /tmp/drain
+        && curl -sf -H "Host: $${DJANGO_ALLOWED_HOSTS%%,*}" http://127.0.0.1:8000/-/health/'
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
+
+  nginx:
+    image: nginx:alpine
+    volumes:
+      - ./staticfiles:/data/static:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - web
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      # Own compress middleware: one defined on the django container would
+      # vanish whenever that container is unhealthy (rollout, startup).
+      - "traefik.http.middlewares.genossenschaftsmatrix-static-compress.compress=true"
+      - "traefik.http.routers.genossenschaftsmatrix-static.rule=Host(`${SITE_HOST:-genossenschaftsmatrix.superservice-international.com}`) && PathPrefix(`/static`)"
+      - "traefik.http.routers.genossenschaftsmatrix-static.entrypoints=websecure"
+      - "traefik.http.routers.genossenschaftsmatrix-static.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.genossenschaftsmatrix-static.middlewares=genossenschaftsmatrix-static-compress"
+      - "traefik.http.services.genossenschaftsmatrix-static.loadbalancer.server.port=80"

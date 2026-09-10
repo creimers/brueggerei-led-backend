@@ -5,6 +5,11 @@ from .models import LEDContent
 from .serializers import LEDContentSerializer
 
 
+def health(request):
+    """Container healthcheck; touches nothing but the process."""
+    return HttpResponse("ok", content_type="text/plain")
+
+
 class LEDContentAPIView(generics.RetrieveAPIView):
     queryset = LEDContent.objects.filter(is_active=True)
     serializer_class = LEDContentSerializer

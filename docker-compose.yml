@@ -1,14 +1,21 @@
-version: '3.8'
+# Development stack. Production is production.yml.
+name: genossenschaftsmatrix
 
 services:
-  web:
-    build: .
+  django:
+    build:
+      context: .
+
+    env_file:
+      - path: .env
+        required: false
+
     ports:
       - "8000:8000"
+
     volumes:
-      - ./:/app
-    environment:
-      - DJANGO_SETTINGS_MODULE=ledmatrix.settings
-    command: >
-      sh -c "uv run python manage.py migrate &&
-             uv run python manage.py runserver 0.0.0.0:8000"
+      - .:/app
+
+    # runserver: autoreload, and it serves /static/ itself (DEBUG).
+    # Production uses start.sh (gunicorn + nginx sidecar).
+    command: sh -c "uv run manage.py migrate && uv run manage.py runserver 0.0.0.0:8000"

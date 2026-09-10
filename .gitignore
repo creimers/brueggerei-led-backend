@@ -3,3 +3,6 @@
 .env
 .claude/
 CLAUDE.md
+# production bind mounts (production.yml)
+data/
+staticfiles/
